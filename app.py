@@ -578,7 +578,7 @@ def main():
                     # 기존 1.8 → 1.4
                     # OCR 속도 개선
                     image = page.render(
-                        scale=1.4
+                        scale=1.6
                     ).to_pil()
 
                     pdf.close()
