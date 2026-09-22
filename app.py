@@ -177,7 +177,7 @@ def main():
         <ul>
             <li>인수검사 완료된 스캔 파일(PDF/이미지)을 선택하시면 AI가 정밀 분석하여 파일명을 자동으로 정돈해 드립니다.</li>
             <li>기울어지거나 90도/180도 회전된 스캔 문서도 자동으로 바르게 교정하여 인식합니다.</li>
-            <li><b>표준 파일명 규칙:</b> <code style="color:#0284C7; font-weight:bold;">수주번호_날짜_업체명_발주서번호.ext</code></li>
+            <li><b>표준 파일명 규칙:</b> <code style="color:#0284C7; font-weight:bold;">수주번호_날짜_업체명_발주서번호.pdf</code></li>
         </ul>
     </div>
     """,
