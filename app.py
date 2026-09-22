@@ -22,7 +22,7 @@ def get_resource_path(relative_path):
 def main():
   # 페이지 기본 설정
   st.set_page_config(
-      page_title='(주)정우산기 | 인수검사서 파일명 자동 생성기',
+      page_title='(주)정우산기 | Jeongwoo AI-Doc Organizer (인수검사서 자동 분류기)',
       page_icon='📄',
       layout='wide',
       initial_sidebar_state='expanded',
@@ -160,8 +160,8 @@ def main():
   st.markdown(
       f"""
     <div class="brand-header">
-        <h1>📄 인수검사서 파일명 자동 생성기 <span class="version-tag">v{UPDATE_DATE}</span></h1>
-        <p>📅 최종 업데이트: {UPDATE_DATE} | (주)정우산기 품질관리 시스템</p>
+        <h1>📄 Jeongwoo AI-Doc Organizer (인수검사서 자동 분류기) <span class="version-tag">v{UPDATE_DATE}</span></h1>
+        <p>📅 최종 업데이트: {UPDATE_DATE} | (주)정우산기 품질관리  </p>
     </div>
     """,
       unsafe_allow_html=True,
