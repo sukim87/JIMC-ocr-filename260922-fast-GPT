@@ -77,7 +77,7 @@ def main():
         border-left: 4px solid #1E88E5;
         border-radius: 8px;
         padding: 18px 22px;
-        margin-bottom: 25px;
+        margin-bottom: 20px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     .info-card ul {
@@ -88,6 +88,24 @@ def main():
         color: #334155;
         font-size: 0.95rem;
         line-height: 1.6;
+    }
+
+    /* 이미지 예시 및 속도 안내 박스 */
+    .tip-box {
+        background-color: #FFFFFF;
+        border: 1px solid #CBD5E1;
+        border-radius: 8px;
+        padding: 16px 20px;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .tip-box p {
+        margin-bottom: 8px;
+        color: #1E293B;
+        font-size: 0.95rem;
+        line-height: 1.5;
     }
 
     /* 파일 업로더 커스텀 강조 */
@@ -182,6 +200,32 @@ def main():
     """,
         unsafe_allow_html=True,
     )
+
+    # ---------------- 📸 샘플 이미지 및 속도 향상 안내 ----------------
+    sample_img_path = get_resource_path('example_sample.png')
+    col_img, col_tip = st.columns([1.2, 1])
+
+    with col_img:
+        if os.path.exists(sample_img_path):
+            st.image(sample_img_path, caption='인수검사서 스캔 예시', use_container_width=True)
+        else:
+            st.info("📌 (예시 이미지를 `example_sample.png` 이름으로 폴더에 넣어주세요.)")
+
+    with col_tip:
+        st.markdown(
+            """
+        <div class="tip-box">
+            <p>📌 <b>예시와 같이 세로로 스캔을 하면 분석시간이 줄어들어 빨리 확인이 됩니다.</b></p>
+            <p>⚡ <b>회전에 비해 <span style="color: #E53935; font-size: 1.1rem;">3배 빨라짐</span></b></p>
+            <p style="font-size: 0.85rem; color: #64748B; margin-top: 5px;">
+                * 올바른 방향(세로)으로 정돈하여 업로드하시면 AI의 방향 교정 연산 단계가 생략되어 더욱 신속하게 처리됩니다.
+            </p>
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<div style='margin-bottom: 25px;'></div>", unsafe_allow_html=True)
 
     # EasyOCR 모델 리더 로드 (캐싱 처리)
     @st.cache_resource
