@@ -193,7 +193,7 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # ---------------- 사용 안내 카드 (글씨체/가독성 대폭 개선) ----------------
+    # ---------------- 사용 안내 카드 (가독성 명확하게 보강) ----------------
     st.markdown(
         """
     <div class="info-card">
@@ -304,8 +304,9 @@ def main():
         parts[0] = corrected_main
         return prefix + ''.join(parts)
 
+    # 📌 [원복 완료] max_w=2000 원본 해상도 유지
     def process_ocr_smart(img, ocr_reader):
-        max_w = 1200
+        max_w = 2000
         w, h = img.size
         if w > max_w:
             new_h = int(h * (max_w / w))
@@ -394,6 +395,7 @@ def main():
                     if file_ext == 'pdf':
                         pdf = pdfium.PdfDocument(file_bytes)
                         page = pdf[0]
+                        # 📌 scale=1.6 선명한 고해상도 렌더링 유지
                         image = page.render(scale=1.6).to_pil()
                         pdf.close()
                     else:
@@ -573,7 +575,7 @@ def main():
                         vendor = re.sub(r'스틱$', '스틸', vendor)
                         vendor = vendor.replace('스틱', '스틸')
 
-                    # 4. 발주서번호(PO No.) 추출 정밀 보강
+                    # 4. 발주서번호(PO No.) 정밀 추출 보강
                     po_no = ''
                     
                     # 1순위: 표 내부 '발주서 번호 / Deliver No.' 우측/아래 영역 좌표 검색
@@ -594,7 +596,6 @@ def main():
                             
                             for _, r in po_targets.iterrows():
                                 raw_p = str(r['text']).strip()
-                                # PO, MI, 숫자 조합 등 발주번호 후보 검색
                                 match_cand = re.search(r'([A-Za-z0-9\-_]{6,16})', raw_p)
                                 if match_cand:
                                     cand_str = match_cand.group(1).strip()
@@ -608,12 +609,10 @@ def main():
 
                     # 2순위: 전체 텍스트 기반 다양한 PO/발주번호 패턴 검색
                     if not po_no:
-                        # P0, PO, MI로 시작하는 발주번호 패턴
                         po_pattern = re.search(r'\b((?:PO|P0|MI)[A-Za-z0-9\-_]{6,14})\b', full_text, re.IGNORECASE)
                         if po_pattern:
                             po_no = po_pattern.group(1).strip()
                         else:
-                            # '발주서' 또는 'PO' 키워드 뒤에 나오는 숫자/영문 추출
                             alt_po = re.search(r'(?:발주서|PO|P\.O|Deliver)*(?:[^\w]|번호|No)*([A-Za-z0-9\-_]{7,15})', full_text, re.IGNORECASE)
                             if alt_po:
                                 cand = alt_po.group(1).strip()
