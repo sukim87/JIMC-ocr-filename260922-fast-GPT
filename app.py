@@ -79,14 +79,14 @@ def main():
         box-shadow: 0 2px 8px rgba(0,0,0,0.03);
     }
 
-    /* 🎨 가독성 대폭 향상 - 표준 파일명 규칙 뱃지 (크기 확 키움) */
+    /* 🎨 가독성 향상 표준 파일명 규칙 뱃지 (크고 명확함) */
     .code-badge {
         background-color: #FFF1F2;
         color: #C8102E;
         border: 1.5px solid #FECDD3;
         padding: 6px 14px;
         border-radius: 8px;
-        font-size: 1.15rem; /* 글자 크기 확대 */
+        font-size: 1.15rem;
         font-weight: 800;
         letter-spacing: 0.5px;
         display: inline-block;
@@ -380,7 +380,6 @@ def main():
         start_time = time.time()
         processed_results = []
 
-        # ☕ 로딩 멘트에 커피 한 잔의 여유 재치 문구 적용
         with st.spinner('☕ AI가 문서 내용을 정밀 분석 중입니다... 따뜻한 커피 한 잔의 여유를 가져보세요! ☕✨'):
             for idx, file in enumerate(target_files):
                 file.seek(0)
@@ -575,19 +574,40 @@ def main():
                         vendor = re.sub(r'스틱$', '스틸', vendor)
                         vendor = vendor.replace('스틱', '스틸')
 
-                    # 4. 발주서번호(PO No.) 정밀 추출 보강
+                    # 4. 발주서번호(PO No.) 추출 - PO/P0 시작 조건 최우선 적용
                     po_no = ''
-                    if not df.empty and 'text' in df.columns:
+                    po_blacklist = [
+                        'PROCUREMENT', 'QUALITY', 'CONTROL', 'TEAM', 'INSPECTION',
+                        'REPORT', 'RECEIVING', 'NOTIFICATION', 'DELIVER', 'CUSTOMER', 'VENDOR'
+                    ]
+
+                    # 1순위: 'PO' 또는 'P0'로 직접 시작하는 발주번호 완벽 매칭 (예: PO2609020005, P020261234)
+                    po_exact = re.search(r'\b((?:PO|P0)[A-Za-z0-9\-_]{6,16})\b', full_text, re.IGNORECASE)
+                    if po_exact:
+                        cand = po_exact.group(1).strip()
+                        if cand.upper() not in po_blacklist and cand != order_no:
+                            po_no = cand
+
+                    # 2순위: 'MI'로 시작하는 특정 발주번호 매칭 (예: MI2609150012)
+                    if not po_no:
+                        mi_exact = re.search(r'\b(MI[0-9]{8,12})\b', full_text, re.IGNORECASE)
+                        if mi_exact:
+                            cand = mi_exact.group(1).strip()
+                            if cand != order_no:
+                                po_no = cand
+
+                    # 3순위: 표 내부 좌표 기반 '발주서 번호 / Deliver No.' 우측/아래 영역 감지
+                    if not po_no and not df.empty and 'text' in df.columns:
                         po_labels = df[
                             df['text']
                             .astype(str)
-                            .str.contains('발주서|Deliver|Po|P.O', na=False, case=False)
+                            .str.contains('발주서|Deliver', na=False, case=False)
                         ]
                         if not po_labels.empty:
                             p_row = po_labels.iloc[0]
                             p_top, p_left = p_row['top'], p_row['left']
                             po_targets = df[
-                                (df['top'] >= p_top - 30)
+                                (df['top'] >= p_top - 20)
                                 & (df['top'] <= p_top + 60)
                                 & (df['left'] >= p_left - 20)
                             ].sort_values(by='top')
@@ -599,22 +619,12 @@ def main():
                                     cand_str = match_cand.group(1).strip()
                                     cand_upper = cand_str.upper()
                                     if (
-                                        cand_upper not in ['DELIVER', 'DELIVERNO', 'INSPECTION', 'REPORT', 'NO', 'NUMBER']
+                                        cand_upper not in po_blacklist
+                                        and not any(bad in cand_upper for bad in ['PROCURE', 'QUALIT', 'DELIVER'])
                                         and cand_str != order_no
                                     ):
                                         po_no = cand_str
                                         break
-
-                    if not po_no:
-                        po_pattern = re.search(r'\b((?:PO|P0|MI)[A-Za-z0-9\-_]{6,14})\b', full_text, re.IGNORECASE)
-                        if po_pattern:
-                            po_no = po_pattern.group(1).strip()
-                        else:
-                            alt_po = re.search(r'(?:발주서|PO|P\.O|Deliver)*(?:[^\w]|번호|No)*([A-Za-z0-9\-_]{7,15})', full_text, re.IGNORECASE)
-                            if alt_po:
-                                cand = alt_po.group(1).strip()
-                                if cand != order_no and cand.upper() not in ['INSPECTION', 'RECEIVING', 'NOTIFICATION']:
-                                    po_no = cand
 
                     disp_order = order_no if order_no else '미인식'
                     disp_date = date if date else '미인식'
