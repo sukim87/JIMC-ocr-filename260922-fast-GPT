@@ -35,7 +35,7 @@ def main():
     .main .block-container {
         padding-top: 1.5rem;
         padding-bottom: 3rem;
-        max-width: 1000px; /* 너무 옆으로 퍼지지 않도록 너비 축소 */
+        max-width: 1000px;
     }
     
     /* 상단 타이틀 정우 RED 테마 헤더 카드 */
@@ -201,7 +201,7 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # ---------------- 📸 크게 배치한 샘플 이미지 & 3배 속도 카드 ----------------
+    # ---------------- 📸 샘플 이미지 & 3배 속도 카드 ----------------
     sample_img_path = get_resource_path('example_sample.jpg')
     if not os.path.exists(sample_img_path):
         sample_img_path = get_resource_path('example_sample.png')
@@ -382,317 +382,284 @@ def main():
         else:
             target_files = uploaded_files
 
-        st.info("""
-            ☕ **인공지능(AI)이 문서 내용을 정밀 분석 중입니다.**  
-            여러 개 파일을 처리하는 동안 **커피 한 잔의 여유**를 가지고 다른 업무를 보셔도 좋습니다! ☕✨
-            """)
-
         start_time = time.time()
         total_files = len(target_files)
         processed_results = []
 
-        # 프로그레스 바 생성
-        progress_bar = st.progress(0, text='⏳ 분석 준비 중...')
+        # 🔄 부드러운 무한 회전 스피너 로더 사용
+        with st.spinner('☕ AI가 문서 내용을 정밀 분석 중입니다... 잠시만 기다려 주세요!'):
+            for idx, file in enumerate(target_files):
+                file.seek(0)
+                file_bytes = file.read()
 
-        for idx, file in enumerate(target_files):
-            # 1단계: 파일 이미지 변환 상태 표시
-            start_pct = int((idx / total_files) * 100)
-            progress_bar.progress(
-                start_pct,
-                text=(
-                    f"⏳ **진행률 {start_pct}%** ({idx}/{total_files}개 완료) | "
-                    f" 현재 `'{file.name}'` 이미지 변환 중..."
-                ),
-            )
+                if not file_bytes:
+                    continue
 
-            file.seek(0)
-            file_bytes = file.read()
-
-            if not file_bytes:
-                continue
-
-            file_ext = (
-                file.name.split('.')[-1].lower() if '.' in file.name else 'pdf'
-            )
-
-            try:
-                image = None
-                if file_ext == 'pdf':
-                    pdf = pdfium.PdfDocument(file_bytes)
-                    page = pdf[0]
-                    image = page.render(scale=1.6).to_pil()
-                    pdf.close()
-                else:
-                    image = Image.open(io.BytesIO(file_bytes))
-
-                # 2단계: OCR AI 분석 진행률 표시
-                mid_pct = int(((idx + 0.5) / total_files) * 100)
-                progress_bar.progress(
-                    mid_pct,
-                    text=(
-                        f"⏳ **진행률 {mid_pct}%** ({idx}/{total_files}개 완료) | "
-                        f" 현재 `'{file.name}'` OCR AI 문맥 분석 중..."
-                    ),
+                file_ext = (
+                    file.name.split('.')[-1].lower() if '.' in file.name else 'pdf'
                 )
 
-                full_text = ''
-                df = pd.DataFrame()
+                try:
+                    image = None
+                    if file_ext == 'pdf':
+                        pdf = pdfium.PdfDocument(file_bytes)
+                        page = pdf[0]
+                        image = page.render(scale=1.6).to_pil()
+                        pdf.close()
+                    else:
+                        image = Image.open(io.BytesIO(file_bytes))
 
-                if image:
-                    ocr_results, _ = process_ocr_smart(image, reader)
+                    full_text = ''
+                    df = pd.DataFrame()
 
-                    parsed_data = []
-                    full_text_list = []
+                    if image:
+                        ocr_results, _ = process_ocr_smart(image, reader)
 
-                    for bbox, text, prob in ocr_results:
-                        text_clean = str(text).strip()
-                        if text_clean:
-                            full_text_list.append(text_clean)
-                            top_y = bbox[0][1]
-                            left_x = bbox[0][0]
-                            parsed_data.append({
-                                'text': text_clean,
-                                'top': top_y,
-                                'left': left_x,
-                                'prob': prob,
-                            })
+                        parsed_data = []
+                        full_text_list = []
 
-                    full_text = ' '.join(full_text_list)
-                    df = pd.DataFrame(parsed_data) if parsed_data else pd.DataFrame()
+                        for bbox, text, prob in ocr_results:
+                            text_clean = str(text).strip()
+                            if text_clean:
+                                full_text_list.append(text_clean)
+                                top_y = bbox[0][1]
+                                left_x = bbox[0][0]
+                                parsed_data.append({
+                                    'text': text_clean,
+                                    'top': top_y,
+                                    'left': left_x,
+                                    'prob': prob,
+                                })
 
-                # 1. 수주번호 추출
-                order_no = ''
-                order_blacklist = [
-                    'ORDER',
-                    'URDER',
-                    'NUMBER',
-                    'DELIVER',
-                    'CUSTOMER',
-                    'VENDOR',
-                    'INSPECTION',
-                    'REPORT',
-                    'NOTIFICATION',
-                    'ORDERNO',
-                    'URDERNO',
-                    'MATERIAL',
-                    'MATER1AL',
-                    'MATL',
-                ]
+                        full_text = ' '.join(full_text_list)
+                        df = pd.DataFrame(parsed_data) if parsed_data else pd.DataFrame()
 
-                znajob_match = re.search(
-                    r'\b(ZNAJOB[A-Z0-9]*)\b', full_text, re.IGNORECASE
-                )
-                if znajob_match:
-                    order_no = znajob_match.group(1).strip()
-                else:
-                    h_matches = re.findall(
-                        r'\b([MHXP][234][A-Z0-9\-_]+)\b', full_text, re.IGNORECASE
+                    # 1. 수주번호 추출
+                    order_no = ''
+                    order_blacklist = [
+                        'ORDER',
+                        'URDER',
+                        'NUMBER',
+                        'DELIVER',
+                        'CUSTOMER',
+                        'VENDOR',
+                        'INSPECTION',
+                        'REPORT',
+                        'NOTIFICATION',
+                        'ORDERNO',
+                        'URDERNO',
+                        'MATERIAL',
+                        'MATER1AL',
+                        'MATL',
+                    ]
+
+                    znajob_match = re.search(
+                        r'\b(ZNAJOB[A-Z0-9]*)\b', full_text, re.IGNORECASE
                     )
-                    for hm in h_matches:
-                        hm_upper = hm.upper()
-                        if (
-                            hm_upper not in order_blacklist
-                            and not hm_upper.startswith('MATER')
-                            and not hm_upper.startswith('MI')
-                            and not hm_upper.startswith('PO')
-                            and not hm_upper.startswith('P0')
-                        ):
-                            order_no = hm.strip()
-                            break
-
-                    if not order_no:
-                        alt_order = re.search(
-                            r'수주번호(?:[^\w]|Order|Urder|No)*([MHXP][234][A-Za-z0-9\-_]*)',
-                            full_text,
-                            re.IGNORECASE,
+                    if znajob_match:
+                        order_no = znajob_match.group(1).strip()
+                    else:
+                        h_matches = re.findall(
+                            r'\b([MHXP][234][A-Z0-9\-_]+)\b', full_text, re.IGNORECASE
                         )
-                        if alt_order:
-                            cand = alt_order.group(1).strip()
-                            cand_upper = cand.upper()
+                        for hm in h_matches:
+                            hm_upper = hm.upper()
                             if (
-                                cand_upper not in order_blacklist
-                                and not cand_upper.startswith('MATER')
-                                and not cand_upper.startswith('MI')
-                                and not cand_upper.startswith('PO')
-                                and not cand_upper.startswith('P0')
+                                hm_upper not in order_blacklist
+                                and not hm_upper.startswith('MATER')
+                                and not hm_upper.startswith('MI')
+                                and not hm_upper.startswith('PO')
+                                and not hm_upper.startswith('P0')
                             ):
-                                order_no = cand
-
-                order_no = re.sub(r'[\-_]$', '', order_no)
-                order_no = clean_and_fix_order_no(order_no)
-
-                # 2. 의뢰일자 추출
-                date = ''
-                date_matches = re.findall(
-                    r'(20[2-9][0-9][-/.][0-9]{2}[-/.][0-9]{2})', full_text
-                )
-                if date_matches:
-                    for m in date_matches:
-                        digits = re.sub(r'[^0-9]', '', m)
-                        if len(digits) == 8 and digits.startswith('20'):
-                            date = digits
-                            break
-                if not date:
-                    for txt in full_text_list:
-                        digits = re.sub(r'[^0-9]', '', txt)
-                        if len(digits) == 8 and digits.startswith('20'):
-                            date = digits
-                            break
-
-                # 3. 업체명 추출
-                vendor = ''
-                customer_words = set()
-                if not df.empty and 'text' in df.columns:
-                    cust_labels = df[
-                        df['text']
-                        .astype(str)
-                        .str.contains('고객|Customer', na=False, case=False)
-                    ]
-                    if not cust_labels.empty:
-                        c_top, c_left = (
-                            cust_labels.iloc[0]['top'],
-                            cust_labels.iloc[0]['left'],
-                        )
-                        cust_targets = df[
-                            (df['top'] >= c_top - 20)
-                            & (df['top'] <= c_top + 30)
-                            & (df['left'] > c_left)
-                        ].sort_values(by='left')
-                        for _, r in cust_targets.iterrows():
-                            clean_c = re.sub(r'[^가-힣a-zA-Z0-9]', '', str(r['text']))
-                            if clean_c and clean_c not in ['고객', 'Customer']:
-                                customer_words.add(clean_c)
-
-                    vendor_labels = df[
-                        df['text']
-                        .astype(str)
-                        .str.contains('업체소재지|소재지|Vendor', na=False, case=False)
-                    ]
-                    if not vendor_labels.empty:
-                        v_row = vendor_labels.iloc[0]
-                        v_top, v_left = v_row['top'], v_row['left']
-                        targets = df[
-                            (df['left'] > v_left + 5)
-                            & (df['top'] >= v_top - 40)
-                            & (df['top'] <= v_top + 50)
-                        ].sort_values(by='left')
-                        for _, r in targets.iterrows():
-                            t = str(r['text'])
-                            if any(
-                                k in t
-                                for k in [
-                                    '업체소재지',
-                                    '소재지',
-                                    'Vendor',
-                                    'Address',
-                                    '결재',
-                                    '성산구',
-                                    '의창구',
-                                    '강서구',
-                                    '녹산산업',
-                                ]
-                            ):
-                                continue
-                            clean_t = re.split(
-                                r'[\(\[\d]|경상남도|창원시|의창구|부산|강서구|녹산|경남|서울|경기|시|구|군',
-                                t,
-                            )[0].strip()
-                            clean_t = re.sub(r'[^가-힣a-zA-Z0-9]', '', clean_t)
-                            if (
-                                len(clean_t) >= 2
-                                and clean_t not in customer_words
-                                and clean_t not in ['업체소재지', '소재지']
-                            ):
-                                vendor = clean_t
+                                order_no = hm.strip()
                                 break
 
-                if not vendor:
-                    for txt in full_text_list:
-                        clean_txt = re.split(
-                            r'[\(\[\d]|경상남도|창원시|의창구|부산|강서구|녹산|경남|서울|경기|시|구|군',
-                            txt,
-                        )[0].strip()
-                        clean_txt = re.sub(r'[^가-힣a-zA-Z0-9]', '', clean_txt)
-                        if clean_txt in customer_words or clean_txt in [
-                            '업체소재지',
-                            '소재지',
-                            'Vendor',
-                            'Address',
-                            '고객',
-                            'Customer',
-                        ]:
-                            continue
-                        if len(clean_txt) >= 2 and any(
-                            k in txt
-                            for k in [
-                                '스틸',
-                                '볼텍',
-                                '머티리얼',
-                                '에스앤피',
-                                '주식회사',
-                                '(주)',
-                                '공업',
-                                '금속',
-                                '테크',
-                                '산업',
-                                '엔지니어링',
-                                '상사',
-                                '정밀',
-                                '기업',
-                                '파이프',
-                                '금동',
-                                '스틱',
-                                '상사',
-                            ]
-                        ):
-                            vendor = clean_txt
-                            break
+                        if not order_no:
+                            alt_order = re.search(
+                                r'수주번호(?:[^\w]|Order|Urder|No)*([MHXP][234][A-Za-z0-9\-_]*)',
+                                full_text,
+                                re.IGNORECASE,
+                            )
+                            if alt_order:
+                                cand = alt_order.group(1).strip()
+                                cand_upper = cand.upper()
+                                if (
+                                    cand_upper not in order_blacklist
+                                    and not cand_upper.startswith('MATER')
+                                    and not cand_upper.startswith('MI')
+                                    and not cand_upper.startswith('PO')
+                                    and not cand_upper.startswith('P0')
+                                ):
+                                    order_no = cand
 
-                if vendor:
-                    vendor = re.sub(r'^업체소재지', '', vendor).strip()
-                    vendor = re.sub(r'스틱$', '스틸', vendor)
-                    vendor = vendor.replace('스틱', '스틸')
+                    order_no = re.sub(r'[\-_]$', '', order_no)
+                    order_no = clean_and_fix_order_no(order_no)
 
-                # 4. 발주서번호 추출
-                po_no = ''
-                po_match = re.search(r'(PO?[0-9]{8,})', full_text, re.IGNORECASE)
-                if po_match:
-                    po_no = po_match.group(1).strip()
-                else:
-                    alt_po = re.search(r'발주서[^\w]*번호[^\w]*([A-Za-z0-9]+)', full_text)
-                    if alt_po:
-                        po_no = alt_po.group(1).strip()
+                    # 2. 의뢰일자 추출
+                    date = ''
+                    date_matches = re.findall(
+                        r'(20[2-9][0-9][-/.][0-9]{2}[-/.][0-9]{2})', full_text
+                    )
+                    if date_matches:
+                        for m in date_matches:
+                            digits = re.sub(r'[^0-9]', '', m)
+                            if len(digits) == 8 and digits.startswith('20'):
+                                date = digits
+                                break
+                    if not date:
+                        for txt in full_text_list:
+                            digits = re.sub(r'[^0-9]', '', txt)
+                            if len(digits) == 8 and digits.startswith('20'):
+                                date = digits
+                                break
 
-                disp_order = order_no if order_no else '미인식'
-                disp_date = date if date else '미인식'
-                disp_vendor = vendor if vendor else '업체명확인필요'
-                disp_po = po_no if po_no else '미인식'
+                    # 3. 업체명 추출
+                    vendor = ''
+                    customer_words = set()
+                    if not df.empty and 'text' in df.columns:
+                        cust_labels = df[
+                            df['text']
+                            .astype(str)
+                            .str.contains('고객|Customer', na=False, case=False)
+                        ]
+                        if not cust_labels.empty:
+                            c_top, c_left = (
+                                cust_labels.iloc[0]['top'],
+                                cust_labels.iloc[0]['left'],
+                            )
+                            cust_targets = df[
+                                (df['top'] >= c_top - 20)
+                                & (df['top'] <= c_top + 30)
+                                & (df['left'] > c_left)
+                            ].sort_values(by='left')
+                            for _, r in cust_targets.iterrows():
+                                clean_c = re.sub(r'[^가-힣a-zA-Z0-9]', '', str(r['text']))
+                                if clean_c and clean_c not in ['고객', 'Customer']:
+                                    customer_words.add(clean_c)
 
-                new_filename = (
-                    f'{disp_order}_{disp_date}_{disp_vendor}_{disp_po}.{file_ext}'
-                )
+                        vendor_labels = df[
+                            df['text']
+                            .astype(str)
+                            .str.contains('업체소재지|소재지|Vendor', na=False, case=False)
+                        ]
+                        if not vendor_labels.empty:
+                            v_row = vendor_labels.iloc[0]
+                            v_top, v_left = v_row['top'], v_row['left']
+                            targets = df[
+                                (df['left'] > v_left + 5)
+                                & (df['top'] >= v_top - 40)
+                                & (df['top'] <= v_top + 50)
+                            ].sort_values(by='left')
+                            for _, r in targets.iterrows():
+                                t = str(r['text'])
+                                if any(
+                                    k in t
+                                    for k in [
+                                        '업체소재지',
+                                        '소재지',
+                                        'Vendor',
+                                        'Address',
+                                        '결재',
+                                        '성산구',
+                                        '의창구',
+                                        '강서구',
+                                        '녹산산업',
+                                    ]
+                                ):
+                                    continue
+                                clean_t = re.split(
+                                    r'[\(\[\d]|경상남도|창원시|의창구|부산|강서구|녹산|경남|서울|경기|시|구|군',
+                                    t,
+                                )[0].strip()
+                                clean_t = re.sub(r'[^가-힣a-zA-Z0-9]', '', clean_t)
+                                if (
+                                    len(clean_t) >= 2
+                                    and clean_t not in customer_words
+                                    and clean_t not in ['업체소재지', '소재지']
+                                ):
+                                    vendor = clean_t
+                                    break
 
-                processed_results.append({
-                    'original_name': file.name,
-                    'new_name': new_filename,
-                    'order_no': disp_order,
-                    'date': disp_date,
-                    'vendor': disp_vendor,
-                    'po_no': disp_po,
-                    'file_bytes': file_bytes,
-                    'ext': file_ext,
-                })
+                    if not vendor:
+                        for txt in full_text_list:
+                            clean_txt = re.split(
+                                r'[\(\[\d]|경상남도|창원시|의창구|부산|강서구|녹산|경남|서울|경기|시|구|군',
+                                txt,
+                            )[0].strip()
+                            clean_txt = re.sub(r'[^가-힣a-zA-Z0-9]', '', clean_txt)
+                            if clean_txt in customer_words or clean_txt in [
+                                '업체소재지',
+                                '소재지',
+                                'Vendor',
+                                'Address',
+                                '고객',
+                                'Customer',
+                            ]:
+                                continue
+                            if len(clean_txt) >= 2 and any(
+                                k in txt
+                                for k in [
+                                    '스틸',
+                                    '볼텍',
+                                    '머티리얼',
+                                    '에스앤피',
+                                    '주식회사',
+                                    '(주)',
+                                    '공업',
+                                    '금속',
+                                    '테크',
+                                    '산업',
+                                    '엔지니어링',
+                                    '상사',
+                                    '정밀',
+                                    '기업',
+                                    '파이프',
+                                    '금동',
+                                    '스틱',
+                                    '상사',
+                                ]
+                            ):
+                                vendor = clean_txt
+                                break
 
-            except Exception as e:
-                st.error(f"'{file.name}' 처리 중 오류 발생: {e}")
-                st.exception(e)
+                    if vendor:
+                        vendor = re.sub(r'^업체소재지', '', vendor).strip()
+                        vendor = re.sub(r'스틱$', '스틸', vendor)
+                        vendor = vendor.replace('스틱', '스틸')
 
-            # 3단계: 단일 파일 완료 시점 진행률 표시
-            done_pct = int(((idx + 1) / total_files) * 100)
-            progress_bar.progress(
-                done_pct,
-                text=f'✅ **진행률 {done_pct}%** ({idx + 1}/{total_files}개 완료)',
-            )
+                    # 4. 발주서번호 추출
+                    po_no = ''
+                    po_match = re.search(r'(PO?[0-9]{8,})', full_text, re.IGNORECASE)
+                    if po_match:
+                        po_no = po_match.group(1).strip()
+                    else:
+                        alt_po = re.search(r'발주서[^\w]*번호[^\w]*([A-Za-z0-9]+)', full_text)
+                        if alt_po:
+                            po_no = alt_po.group(1).strip()
+
+                    disp_order = order_no if order_no else '미인식'
+                    disp_date = date if date else '미인식'
+                    disp_vendor = vendor if vendor else '업체명확인필요'
+                    disp_po = po_no if po_no else '미인식'
+
+                    new_filename = (
+                        f'{disp_order}_{disp_date}_{disp_vendor}_{disp_po}.{file_ext}'
+                    )
+
+                    processed_results.append({
+                        'original_name': file.name,
+                        'new_name': new_filename,
+                        'order_no': disp_order,
+                        'date': disp_date,
+                        'vendor': disp_vendor,
+                        'po_no': disp_po,
+                        'file_bytes': file_bytes,
+                        'ext': file_ext,
+                    })
+
+                except Exception as e:
+                    st.error(f"'{file.name}' 처리 중 오류 발생: {e}")
+                    st.exception(e)
 
         elapsed_time = time.time() - start_time
 
