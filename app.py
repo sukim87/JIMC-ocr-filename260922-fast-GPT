@@ -27,7 +27,7 @@ def main():
         initial_sidebar_state='expanded',
     )
 
-    # 🎨 정우산기 브랜드 컬러 (RED & WHITE) 세련된 CSS 적용
+    # 🎨 정우산기 브랜드 컬러 (RED & WHITE) 및 가독성 강화 CSS 적용
     st.markdown(
         """
     <style>
@@ -77,6 +77,21 @@ def main():
         padding: 18px 22px;
         margin-bottom: 20px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    }
+
+    /* 🎨 가독성 향상 표준 파일명 규칙 뱃지 스타일 */
+    .code-badge {
+        background-color: #FFF1F2;
+        color: #C8102E;
+        border: 1px solid #FECDD3;
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 1.02rem;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        display: inline-block;
+        margin-top: 4px;
+        font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
     }
 
     .speed-card {
@@ -178,17 +193,19 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # ---------------- 사용 안내 카드 ----------------
+    # ---------------- 사용 안내 카드 (글씨체/가독성 대폭 개선) ----------------
     st.markdown(
         """
     <div class="info-card">
-        <div style="font-weight: 700; color: #1E293B; margin-bottom: 8px; font-size: 1.05rem;">
+        <div style="font-weight: 700; color: #1E293B; margin-bottom: 10px; font-size: 1.05rem;">
             💡 스마트 안내
         </div>
-        <ul style="padding-left: 18px; margin-bottom: 0; color: #334155; font-size: 0.92rem; line-height: 1.6;">
+        <ul style="padding-left: 18px; margin-bottom: 0; color: #334155; font-size: 0.95rem; line-height: 1.75;">
             <li>인수검사 완료 스캔 문서(PDF/이미지)를 올리시면 AI가 파일명을 자동 정돈합니다.</li>
             <li>기울어지거나 90도/180도 회전된 스캔본도 바르게 교정하여 인식합니다.</li>
-            <li><b>표준 파일명 규칙:</b> <code style="color:#C8102E; font-weight:bold;">수주번호_의뢰일자_업체명_발주서번호.pdf</code></li>
+            <li style="margin-top: 4px;"><b>표준 파일명 규칙:</b><br>
+                <span class="code-badge">수주번호 _ 의뢰일자 _ 업체명 _ 발주서번호.pdf</span>
+            </li>
         </ul>
     </div>
     """,
@@ -287,7 +304,6 @@ def main():
         parts[0] = corrected_main
         return prefix + ''.join(parts)
 
-    # 🚀 [반영 완료] max_w 해상도를 1200px로 조정하여 AI 연산 데이터량 줄임
     def process_ocr_smart(img, ocr_reader):
         max_w = 1200
         w, h = img.size
@@ -378,9 +394,7 @@ def main():
                     if file_ext == 'pdf':
                         pdf = pdfium.PdfDocument(file_bytes)
                         page = pdf[0]
-                        # 📌 요청하신 대로 선명도 강화를 위해 scale=1.6 고해상도 유지
                         image = page.render(scale=1.6).to_pil()
-                        # 🚀 [반영 완료] PDF 객체 사용 직후 즉시 닫아서 메모리 점유 최소화
                         pdf.close()
                     else:
                         image = Image.open(io.BytesIO(file_bytes))
@@ -559,15 +573,52 @@ def main():
                         vendor = re.sub(r'스틱$', '스틸', vendor)
                         vendor = vendor.replace('스틱', '스틸')
 
-                    # 4. 발주서번호 추출
+                    # 4. 발주서번호(PO No.) 추출 정밀 보강
                     po_no = ''
-                    po_match = re.search(r'(PO?[0-9]{8,})', full_text, re.IGNORECASE)
-                    if po_match:
-                        po_no = po_match.group(1).strip()
-                    else:
-                        alt_po = re.search(r'발주서[^\w]*번호[^\w]*([A-Za-z0-9]+)', full_text)
-                        if alt_po:
-                            po_no = alt_po.group(1).strip()
+                    
+                    # 1순위: 표 내부 '발주서 번호 / Deliver No.' 우측/아래 영역 좌표 검색
+                    if not df.empty and 'text' in df.columns:
+                        po_labels = df[
+                            df['text']
+                            .astype(str)
+                            .str.contains('발주서|Deliver|Po|P.O', na=False, case=False)
+                        ]
+                        if not po_labels.empty:
+                            p_row = po_labels.iloc[0]
+                            p_top, p_left = p_row['top'], p_row['left']
+                            po_targets = df[
+                                (df['top'] >= p_top - 30)
+                                & (df['top'] <= p_top + 60)
+                                & (df['left'] >= p_left - 20)
+                            ].sort_values(by='top')
+                            
+                            for _, r in po_targets.iterrows():
+                                raw_p = str(r['text']).strip()
+                                # PO, MI, 숫자 조합 등 발주번호 후보 검색
+                                match_cand = re.search(r'([A-Za-z0-9\-_]{6,16})', raw_p)
+                                if match_cand:
+                                    cand_str = match_cand.group(1).strip()
+                                    cand_upper = cand_str.upper()
+                                    if (
+                                        cand_upper not in ['DELIVER', 'DELIVERNO', 'INSPECTION', 'REPORT', 'NO', 'NUMBER']
+                                        and cand_str != order_no
+                                    ):
+                                        po_no = cand_str
+                                        break
+
+                    # 2순위: 전체 텍스트 기반 다양한 PO/발주번호 패턴 검색
+                    if not po_no:
+                        # P0, PO, MI로 시작하는 발주번호 패턴
+                        po_pattern = re.search(r'\b((?:PO|P0|MI)[A-Za-z0-9\-_]{6,14})\b', full_text, re.IGNORECASE)
+                        if po_pattern:
+                            po_no = po_pattern.group(1).strip()
+                        else:
+                            # '발주서' 또는 'PO' 키워드 뒤에 나오는 숫자/영문 추출
+                            alt_po = re.search(r'(?:발주서|PO|P\.O|Deliver)*(?:[^\w]|번호|No)*([A-Za-z0-9\-_]{7,15})', full_text, re.IGNORECASE)
+                            if alt_po:
+                                cand = alt_po.group(1).strip()
+                                if cand != order_no and cand.upper() not in ['INSPECTION', 'RECEIVING', 'NOTIFICATION']:
+                                    po_no = cand
 
                     disp_order = order_no if order_no else '미인식'
                     disp_date = date if date else '미인식'
