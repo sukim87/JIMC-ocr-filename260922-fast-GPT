@@ -202,14 +202,17 @@ def main():
     )
 
     # ---------------- 📸 샘플 이미지 및 속도 향상 안내 ----------------
-    sample_img_path = get_resource_path('example_sample.png')
+    sample_img_path = get_resource_path('example_sample.jpg')
+    if not os.path.exists(sample_img_path):
+        sample_img_path = get_resource_path('example_sample.png')
+
     col_img, col_tip = st.columns([1.2, 1])
 
     with col_img:
         if os.path.exists(sample_img_path):
             st.image(sample_img_path, caption='인수검사서 스캔 예시', use_container_width=True)
         else:
-            st.info("📌 (예시 이미지를 `example_sample.png` 이름으로 폴더에 넣어주세요.)")
+            st.info("📌 (예시 이미지를 `example_sample.jpg` 이름으로 폴더에 넣어주세요.)")
 
     with col_tip:
         st.markdown(
